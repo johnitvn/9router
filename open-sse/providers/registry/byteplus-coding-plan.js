@@ -1,0 +1,35 @@
+export default {
+  id: "byteplus-coding-plan",
+  priority: 71,
+  alias: "byteplus-coding-plan",
+  aliases: ["bpcp"],
+  uiAlias: "bpcp",
+  display: {
+    name: "BytePlus Coding Plan",
+    icon: "code",
+    color: "#2563EB",
+    textIcon: "BPC",
+    website: "https://console.byteplus.com/ark/region:ap-southeast-1/subscription/coding-plan",
+    notice: {
+      text: "BytePlus Coding Plan subscription — dedicated coding endpoint. Uses a Coding Plan API key from the BytePlus Ark console.",
+      apiKeyUrl: "https://console.byteplus.com/ark/region:ap-southeast-1/subscription/coding-plan",
+    },
+  },
+  category: "apikey",
+  transport: {
+    baseUrl: "https://ark.ap-southeast.bytepluses.com/api/coding/v3/chat/completions",
+    headers: {},
+  },
+  models: [
+    { id: "doubao-seed-2-1-turbo", name: "Doubao Seed 2.1 Turbo (BytePlus Coding Plan)" },
+    { id: "doubao-seed-2.0-lite", name: "Doubao Seed 2.0 Lite (BytePlus Coding Plan)" },
+    { id: "deepseek-v4-flash", name: "DeepSeek V4 Flash (BytePlus Coding Plan)" },
+    { id: "glm-5.2", name: "GLM 5.2 (BytePlus Coding Plan)" },
+    { id: "kimi-k2.7-code", name: "Kimi K2.7 Code (BytePlus Coding Plan)" },
+    { id: "minimax-m3", name: "MiniMax M3 (BytePlus Coding Plan)" },
+    { id: "deepseek-v4-pro", name: "DeepSeek V4 Pro (BytePlus Coding Plan)" },
+    { id: "minimax-m2.7", name: "MiniMax M2.7 (BytePlus Coding Plan)" },
+    { id: "kimi-k2.6", name: "Kimi K2.6 (BytePlus Coding Plan)" },
+  ],
+  serviceKinds: ["llm"],
+};
