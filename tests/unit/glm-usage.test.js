@@ -80,7 +80,7 @@ describe("getGlmUsage and getUsageForProvider(glm)", () => {
     vi.clearAllMocks();
   });
 
-  it("handles CREDIT_LIMIT with session 5h and weekly 7d quotas", async () => {
+  it("handles CREDIT_LIMIT entries with absolute usage", async () => {
     proxyAwareFetch.mockResolvedValueOnce(jsonResponse(SAMPLE_GLM_CREDIT_USAGE));
 
     const usage = await getUsageForProvider({
@@ -90,20 +90,18 @@ describe("getGlmUsage and getUsageForProvider(glm)", () => {
 
     expect(usage.message).toBeUndefined();
     expect(usage.plan).toBe("Lite");
-    expect(usage.quotas["Session (5h)"]).toEqual({
-      used: 25,
-      total: 100,
-      remaining: 75,
-      remainingPercentage: 75,
+    expect(usage.quotas["Credits 2k"]).toEqual({
+      used: 0,
+      total: 2000,
       resetAt: new Date(1787905548392).toISOString(),
+      remainingPercentage: 100,
       unlimited: false,
     });
-    expect(usage.quotas["Weekly (7d)"]).toEqual({
-      used: 100 ? 10 : 10,
-      total: 100,
-      remaining: 90,
-      remainingPercentage: 90,
+    expect(usage.quotas["Credits 10k"]).toEqual({
+      used: 0,
+      total: 10000,
       resetAt: new Date(1788492142997).toISOString(),
+      remainingPercentage: 100,
       unlimited: false,
     });
   });
@@ -118,17 +116,16 @@ describe("getGlmUsage and getUsageForProvider(glm)", () => {
 
     expect(usage.message).toBeUndefined();
     expect(usage.plan).toBe("Standard");
-    expect(usage.quotas["Tokens"]).toEqual({
+    expect(usage.quotas["session"]).toEqual({
       used: 40,
       total: 100,
-      remaining: 60,
-      remainingPercentage: 60,
       resetAt: new Date(1787905548392).toISOString(),
+      remainingPercentage: 60,
       unlimited: false,
     });
   });
 
-  it("handles fallback key for custom limit units", async () => {
+  it("keeps session key for a single custom-unit limit", async () => {
     proxyAwareFetch.mockResolvedValueOnce(
       jsonResponse({
         code: 200,
@@ -149,12 +146,11 @@ describe("getGlmUsage and getUsageForProvider(glm)", () => {
 
     const usage = await getGlmUsage("glm-key", "glm");
     expect(usage.plan).toBe("Pro");
-    expect(usage.quotas["Limit (12)"]).toEqual({
+    expect(usage.quotas["session"]).toEqual({
       used: 5,
       total: 100,
-      remaining: 95,
-      remainingPercentage: 95,
       resetAt: null,
+      remainingPercentage: 95,
       unlimited: false,
     });
   });
