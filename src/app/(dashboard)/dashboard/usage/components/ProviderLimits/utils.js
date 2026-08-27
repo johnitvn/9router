@@ -661,6 +661,23 @@ export function parseQuotaData(provider, data) {
         }
         break;
 
+      case "glm":
+      case "glm-cn":
+        // GLM Coding: CREDIT_LIMIT (Max plan, absolute usage) or legacy TOKENS_LIMIT (percentage).
+        // Forward remainingPercentage only — utils treats `remaining` as 0-100% so absolute remaining must be dropped.
+        if (data.quotas) {
+          Object.entries(data.quotas).forEach(([name, quota]) => {
+            normalizedQuotas.push({
+              name,
+              used: quota.used || 0,
+              total: quota.total || 0,
+              resetAt: quota.resetAt || null,
+              remainingPercentage: quota.remainingPercentage,
+            });
+          });
+        }
+        break;
+
       default:
         // Generic fallback for unknown providers
         if (data.quotas) {
