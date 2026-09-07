@@ -473,12 +473,15 @@ export async function getUsageStats(period = "all") {
       stats.totalCost += day.cost || 0;
 
       for (const [prov, p] of Object.entries(day.byProvider || {})) {
-        if (!stats.byProvider[prov]) stats.byProvider[prov] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0 };
+        if (!stats.byProvider[prov]) {
+          stats.byProvider[prov] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0, provider: providerNodeNameMap[prov] || prov, lastUsed: dateKey };
+        }
         stats.byProvider[prov].requests += p.requests || 0;
         stats.byProvider[prov].promptTokens += p.promptTokens || 0;
         stats.byProvider[prov].completionTokens += p.completionTokens || 0;
         stats.byProvider[prov].cachedTokens += p.cachedTokens || 0;
         stats.byProvider[prov].cost += p.cost || 0;
+        if (dateKey > (stats.byProvider[prov].lastUsed || "")) stats.byProvider[prov].lastUsed = dateKey;
       }
 
       for (const [mk, m] of Object.entries(day.byModel || {})) {
@@ -574,6 +577,8 @@ export async function getUsageStats(period = "all") {
       const modelKey = e.provider ? `${e.model} (${e.provider})` : e.model;
       if (stats.byModel[modelKey] && new Date(ts) > new Date(stats.byModel[modelKey].lastUsed)) stats.byModel[modelKey].lastUsed = ts;
 
+      if (e.provider && stats.byProvider[e.provider] && new Date(ts) > new Date(stats.byProvider[e.provider].lastUsed)) stats.byProvider[e.provider].lastUsed = ts;
+
       const comboName = parseJson(e.meta, {})?.requestedModel;
       if (comboName && stats.byCombo[comboName] && new Date(ts) > new Date(stats.byCombo[comboName].lastUsed)) stats.byCombo[comboName].lastUsed = ts;
 
@@ -621,12 +626,13 @@ export async function getUsageStats(period = "all") {
       stats.totalCachedTokens += cachedTokens;
       stats.totalCost += entryCost;
 
-      if (!stats.byProvider[r.provider]) stats.byProvider[r.provider] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0 };
+      if (!stats.byProvider[r.provider]) stats.byProvider[r.provider] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0, provider: providerDisplayName, lastUsed: r.timestamp };
       stats.byProvider[r.provider].requests++;
       stats.byProvider[r.provider].promptTokens += promptTokens;
       stats.byProvider[r.provider].completionTokens += completionTokens;
       stats.byProvider[r.provider].cachedTokens += cachedTokens;
       stats.byProvider[r.provider].cost += entryCost;
+      if (new Date(r.timestamp) > new Date(stats.byProvider[r.provider].lastUsed)) stats.byProvider[r.provider].lastUsed = r.timestamp;
 
       const modelKey = r.provider ? `${r.model} (${r.provider})` : r.model;
       if (!stats.byModel[modelKey]) {

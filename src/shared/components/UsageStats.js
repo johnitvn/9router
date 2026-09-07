@@ -192,12 +192,19 @@ const COMBO_COLUMNS = [
   { field: "lastUsed", label: "Last Used", align: "right" },
 ];
 
+const PROVIDER_COLUMNS = [
+  { field: "provider", label: "Provider" },
+  { field: "requests", label: "Requests", align: "right" },
+  { field: "lastUsed", label: "Last Used", align: "right" },
+];
+
 const TABLE_OPTIONS = [
   { value: "model", label: "Usage by Model" },
   { value: "account", label: "Usage by Account" },
   { value: "apiKey", label: "Usage by API Key" },
   { value: "endpoint", label: "Usage by Endpoint" },
   { value: "combo", label: "Usage by Combo" },
+  { value: "provider", label: "Usage by Provider" },
 ];
 
 const PERIODS = [
@@ -461,6 +468,28 @@ export default function UsageStats({ period: periodProp, setPeriod: setPeriodPro
                   </span>
                 )}
               </td>
+              <td className="px-6 py-3 text-right">{fmt(item.requests)}</td>
+              <td className="px-6 py-3 text-right text-text-muted whitespace-nowrap">{fmtTime(item.lastUsed)}</td>
+            </>
+          ),
+        };
+      }
+      case "provider": {
+        return {
+          columns: PROVIDER_COLUMNS,
+          groupedData: groupDataByKey(sortData(stats.byProvider, {}, sortBy, sortOrder), "provider"),
+          storageKey: "usage-stats:expanded-providers",
+          emptyMessage: "No provider usage recorded yet.",
+          renderSummaryCells: (group) => (
+            <>
+              <td className="px-6 py-3 text-text-muted">—</td>
+              <td className="px-6 py-3 text-right">{fmt(group.summary.requests)}</td>
+              <td className="px-6 py-3 text-right text-text-muted whitespace-nowrap">{fmtTime(group.summary.lastUsed)}</td>
+            </>
+          ),
+          renderDetailCells: (item) => (
+            <>
+              <td className="px-6 py-3 font-medium"><Badge variant="neutral" size="sm">{item.provider}</Badge></td>
               <td className="px-6 py-3 text-right">{fmt(item.requests)}</td>
               <td className="px-6 py-3 text-right text-text-muted whitespace-nowrap">{fmtTime(item.lastUsed)}</td>
             </>

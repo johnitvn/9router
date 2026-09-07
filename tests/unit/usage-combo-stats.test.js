@@ -71,3 +71,24 @@ describe("usage stats by combo", () => {
     expect(combo.promptTokens).toBe(60);
   });
 });
+
+describe("usage stats by provider", () => {
+  it("exposes provider rows with display name and lastUsed in the 24h path", async () => {
+    const stats = await db.getUsageStats("24h");
+    const provider = stats.byProvider?.openai;
+    expect(provider).toBeDefined();
+    expect(provider.requests).toBe(4); // 3 combo members + 1 non-combo entry
+    expect(provider.promptTokens).toBe(160); // 10 + 20 + 30 + 100
+    expect(provider.provider).toBeTruthy();
+    expect(provider.lastUsed).toBeTruthy();
+  });
+
+  it("exposes provider rows with display name and lastUsed in the daily-summary path (7d)", async () => {
+    const stats = await db.getUsageStats("7d");
+    const provider = stats.byProvider?.openai;
+    expect(provider).toBeDefined();
+    expect(provider.requests).toBe(4);
+    expect(provider.provider).toBe("openai"); // falls back to the id without a matching node name
+    expect(provider.lastUsed).toBeTruthy();
+  });
+});
