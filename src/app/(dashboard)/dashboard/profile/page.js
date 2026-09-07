@@ -81,6 +81,12 @@ export default function ProfilePage() {
   const [proxyLoading, setProxyLoading] = useState(false);
   const [proxyTestLoading, setProxyTestLoading] = useState(false);
 
+  const [isRemoteHost, setIsRemoteHost] = useState(false);
+  useEffect(() => {
+    if (typeof window !== "undefined")
+      setIsRemoteHost(!["localhost", "127.0.0.1", "::1"].includes(window.location.hostname));
+  }, []);
+
   useEffect(() => {
     fetch("/api/settings")
       .then((res) => res.json())
@@ -319,6 +325,21 @@ export default function ProfilePage() {
       }
     } catch (err) {
       console.error("Failed to update combo sticky limit:", err);
+    }
+  };
+
+  const updateReturnComboName = async (value) => {
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ returnComboNameInResponse: value }),
+      });
+      if (res.ok) {
+        setSettings(prev => ({ ...prev, returnComboNameInResponse: value }));
+      }
+    } catch (err) {
+      console.error("Failed to update return combo name setting:", err);
     }
   };
 
@@ -1509,6 +1530,21 @@ export default function ProfilePage() {
               </div>
             )}
 
+            {/* Return Combo Name in Response */}
+            <div className="flex items-start sm:items-center justify-between gap-4 pt-4 border-t border-border/50">
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm sm:text-base">Return Combo Name</p>
+                <p className="text-xs sm:text-sm text-text-muted">
+                  Report the combo name as the model in responses instead of the actual upstream model
+                </p>
+              </div>
+              <Toggle
+                checked={settings.returnComboNameInResponse !== false}
+                onChange={() => updateReturnComboName(settings.returnComboNameInResponse === false)}
+                disabled={loading}
+              />
+            </div>
+
             <p className="text-xs text-text-muted italic pt-2 border-t border-border/50">
               {settings.fallbackStrategy === "round-robin"
                 ? `Currently distributing requests across all available accounts with ${settings.stickyRoundRobinLimit || 3} calls per account.`
@@ -1639,7 +1675,7 @@ export default function ProfilePage() {
         {/* App Info */}
         <div className="text-center text-xs sm:text-sm text-text-muted py-4">
           <p>{APP_CONFIG.name} v{APP_CONFIG.version}</p>
-          <p className="mt-1">Local Mode - All data stored on your machine</p>
+          <p className="mt-1">{isRemoteHost ? "Remote Mode" : "Local Mode - All data stored on your machine"}</p>
         </div>
       </div>
 

@@ -32,6 +32,7 @@ import {
   CLAUDE_REFRESH_INTERVAL_MS,
   DEPLETED_QUOTA_THRESHOLD,
   AUTO_REFRESH_STORAGE_KEY,
+  ACCOUNT_FILTER_STORAGE_KEY,
   CONNECTIONS_PAGE_SIZE,
   ACCOUNT_PAGE_SIZE_OPTIONS,
   ACCOUNT_PAGE_SIZE_MAX,
@@ -134,6 +135,7 @@ export default function ProviderLimits() {
   const [autoPingMaps, setAutoPingMaps] = useState({ claude: {}, codex: {} });
   const [lastUpdated, setLastUpdated] = useState(null);
   const [hasHydratedAutoRefresh, setHasHydratedAutoRefresh] = useState(false);
+  const [hasHydratedAccountFilter, setHasHydratedAccountFilter] = useState(false);
   const [refreshingAll, setRefreshingAll] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const [connectionsLoading, setConnectionsLoading] = useState(true);
@@ -501,6 +503,9 @@ export default function ProviderLimits() {
   }, [refreshingAll, fetchConnections, fetchQuota, page]);
 
   useEffect(() => {
+    // Wait for the account-status filter to hydrate from localStorage so the
+    // first connections fetch already uses the remembered value.
+    if (!hasHydratedAccountFilter) return;
     const initializeData = async () => {
       setConnectionsLoading(true);
       const visibleConnections = await fetchConnections(page);
@@ -522,7 +527,7 @@ export default function ProviderLimits() {
     };
 
     initializeData();
-  }, [fetchConnections, fetchQuota, page]);
+  }, [hasHydratedAccountFilter, fetchConnections, fetchQuota, page]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -536,6 +541,22 @@ export default function ProviderLimits() {
     if (typeof window === "undefined" || !hasHydratedAutoRefresh) return;
     window.localStorage.setItem(AUTO_REFRESH_STORAGE_KEY, String(autoRefresh));
   }, [autoRefresh, hasHydratedAutoRefresh]);
+
+  // Restore account-status filter preference (All accounts / Active / Turned off)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(ACCOUNT_FILTER_STORAGE_KEY);
+    if (ACCOUNT_FILTER_OPTIONS.some((option) => option.value === stored)) {
+      setAccountFilter(stored);
+    }
+    setHasHydratedAccountFilter(true);
+  }, []);
+
+  // Persist account-status filter preference
+  useEffect(() => {
+    if (typeof window === "undefined" || !hasHydratedAccountFilter) return;
+    window.localStorage.setItem(ACCOUNT_FILTER_STORAGE_KEY, accountFilter);
+  }, [accountFilter, hasHydratedAccountFilter]);
 
   // Load auto-ping per-connection maps
   useEffect(() => {
@@ -596,6 +617,17 @@ export default function ProviderLimits() {
     const providerVisibility = previous[provider] || {};
     const hidden = new Set(providerVisibility.hidden || []);
     hidden.add(key);
+    if (provider === "antigravity") {
+      if (key === "gemini") {
+        for (const k of hidden) {
+          if (k.startsWith("gemini-") && !k.includes("image")) hidden.delete(k);
+        }
+      } else if (key === "claude") {
+        for (const k of hidden) {
+          if (k.startsWith("claude-")) hidden.delete(k);
+        }
+      }
+    }
     const next = {
       ...previous,
       [provider]: {
@@ -614,6 +646,17 @@ export default function ProviderLimits() {
     const providerVisibility = previous[provider] || {};
     const hidden = new Set(providerVisibility.hidden || []);
     hidden.delete(key);
+    if (provider === "antigravity") {
+      if (key === "gemini") {
+        for (const k of hidden) {
+          if (k.startsWith("gemini-") && !k.includes("image")) hidden.delete(k);
+        }
+      } else if (key === "claude") {
+        for (const k of hidden) {
+          if (k.startsWith("claude-")) hidden.delete(k);
+        }
+      }
+    }
     const next = {
       ...previous,
       [provider]: {
@@ -1264,6 +1307,11 @@ export default function ProviderLimits() {
                     }
                     onHideQuota={(quotaRow) => handleHideQuota(conn.provider, quotaRow)}
                   />
+                )}
+                {quota?.message && !error && !isLoading && (
+                  <p className="mt-2 px-1 text-[10px] leading-relaxed text-text-muted">
+                    {quota.message}
+                  </p>
                 )}
                 {hiddenQuotaRows.length > 0 && (
                   <div className="mt-2 flex min-w-0 items-center gap-1 border-t border-black/5 pt-2 text-[10px] text-text-muted dark:border-white/5">
