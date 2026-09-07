@@ -328,6 +328,21 @@ export default function ProfilePage() {
     }
   };
 
+  const updateReturnComboName = async (value) => {
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ returnComboNameInResponse: value }),
+      });
+      if (res.ok) {
+        setSettings(prev => ({ ...prev, returnComboNameInResponse: value }));
+      }
+    } catch (err) {
+      console.error("Failed to update return combo name setting:", err);
+    }
+  };
+
   const updateRequireLogin = async (requireLogin) => {
     try {
       const res = await fetch("/api/settings", {
@@ -1514,6 +1529,21 @@ export default function ProfilePage() {
                 />
               </div>
             )}
+
+            {/* Return Combo Name in Response */}
+            <div className="flex items-start sm:items-center justify-between gap-4 pt-4 border-t border-border/50">
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm sm:text-base">Return Combo Name</p>
+                <p className="text-xs sm:text-sm text-text-muted">
+                  Report the combo name as the model in responses instead of the actual upstream model
+                </p>
+              </div>
+              <Toggle
+                checked={settings.returnComboNameInResponse !== false}
+                onChange={() => updateReturnComboName(settings.returnComboNameInResponse === false)}
+                disabled={loading}
+              />
+            </div>
 
             <p className="text-xs text-text-muted italic pt-2 border-t border-border/50">
               {settings.fallbackStrategy === "round-robin"
