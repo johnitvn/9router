@@ -78,11 +78,18 @@ function aggregateEntryToDay(day, entry) {
   day.byAccount ||= {};
   day.byApiKey ||= {};
   day.byEndpoint ||= {};
+  day.byCombo ||= {};
 
   if (entry.provider) addToCounter(day.byProvider, entry.provider, vals);
 
   const modelKey = entry.provider ? `${entry.model}|${entry.provider}` : entry.model;
   addToCounter(day.byModel, modelKey, { ...vals, meta: { rawModel: entry.model, provider: entry.provider } });
+
+  // Requests served through a combo carry the client-visible combo name in
+  // meta (see handleChat → saveUsageStats); aggregate it as its own dimension.
+  if (entry.meta?.requestedModel) {
+    addToCounter(day.byCombo, entry.meta.requestedModel, vals);
+  }
 
   if (entry.connectionId) {
     addToCounter(day.byAccount, entry.connectionId, { ...vals, meta: { rawModel: entry.model, provider: entry.provider } });
@@ -284,7 +291,7 @@ export async function saveRequestUsage(entry) {
           entry.timestamp, entry.provider || null, entry.model || null,
           entry.connectionId || null, entry.apiKey || null, entry.endpoint || null,
           promptTokens, completionTokens, entry.cost || 0, entry.status || "ok",
-          stringifyJson(tokens), stringifyJson({}),
+          stringifyJson(tokens), stringifyJson(entry.meta || {}),
         ]
       );
 
@@ -292,7 +299,7 @@ export async function saveRequestUsage(entry) {
       const row = db.get(`SELECT data FROM usageDaily WHERE dateKey = ?`, [dateKey]);
       const day = row ? parseJson(row.data, {}) : {
         requests: 0, promptTokens: 0, completionTokens: 0, cost: 0,
-        byProvider: {}, byModel: {}, byAccount: {}, byApiKey: {}, byEndpoint: {},
+        byProvider: {}, byModel: {}, byAccount: {}, byApiKey: {}, byEndpoint: {}, byCombo: {},
       };
       aggregateEntryToDay(day, entry);
       db.run(`INSERT INTO usageDaily(dateKey, data) VALUES(?, ?) ON CONFLICT(dateKey) DO UPDATE SET data = excluded.data`, [dateKey, stringifyJson(day)]);
@@ -346,11 +353,18 @@ function loadDaysInRange(adapter, maxDays) {
 export async function getUsageStats(period = "all") {
   const db = await getAdapter();
 
-  const [{ getProviderConnections }, { getApiKeys }, { getProviderNodes }] = await Promise.all([
+  const [{ getProviderConnections }, { getApiKeys }, { getProviderNodes }, { getCombos }] = await Promise.all([
     import("./connectionsRepo.js"),
     import("./apiKeysRepo.js"),
     import("./nodesRepo.js"),
+    import("./combosRepo.js"),
   ]);
+
+  // Combo name → member models, to enrich stats.byCombo entries
+  const comboModelsMap = {};
+  try {
+    for (const c of await getCombos()) if (c?.name) comboModelsMap[c.name] = c.models || [];
+  } catch {}
 
   let allConnections = [];
   try { allConnections = await getProviderConnections(); } catch {}
@@ -395,7 +409,7 @@ export async function getUsageStats(period = "all") {
   const stats = {
     totalRequests: 0,
     totalPromptTokens: 0, totalCompletionTokens: 0, totalCachedTokens: 0, totalCost: 0,
-    byProvider: {}, byModel: {}, byAccount: {}, byApiKey: {}, byEndpoint: {},
+    byProvider: {}, byModel: {}, byAccount: {}, byApiKey: {}, byEndpoint: {}, byCombo: {},
     last10Minutes: [],
     pending: pendingRequests,
     activeRequests: [],
@@ -483,6 +497,18 @@ export async function getUsageStats(period = "all") {
         if (dateKey > (stats.byModel[statsKey].lastUsed || "")) stats.byModel[statsKey].lastUsed = dateKey;
       }
 
+      for (const [comboName, c] of Object.entries(day.byCombo || {})) {
+        if (!stats.byCombo[comboName]) {
+          stats.byCombo[comboName] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0, comboName, models: comboModelsMap[comboName] || null, lastUsed: dateKey };
+        }
+        stats.byCombo[comboName].requests += c.requests || 0;
+        stats.byCombo[comboName].promptTokens += c.promptTokens || 0;
+        stats.byCombo[comboName].completionTokens += c.completionTokens || 0;
+        stats.byCombo[comboName].cachedTokens += c.cachedTokens || 0;
+        stats.byCombo[comboName].cost += c.cost || 0;
+        if (dateKey > (stats.byCombo[comboName].lastUsed || "")) stats.byCombo[comboName].lastUsed = dateKey;
+      }
+
       for (const [connId, a] of Object.entries(day.byAccount || {})) {
         const accountName = connectionMap[connId] || `Account ${connId.slice(0, 8)}...`;
         const rawModel = a.rawModel || "";
@@ -540,13 +566,16 @@ export async function getUsageStats(period = "all") {
     // Overlay precise lastUsed timestamps from history
     const overlayCutoff = maxDays ? Date.now() - maxDays * 86400000 : 0;
     const histRows = db.all(
-      `SELECT timestamp, provider, model, connectionId, apiKey, endpoint FROM usageHistory WHERE timestamp >= ?`,
+      `SELECT timestamp, provider, model, connectionId, apiKey, endpoint, meta FROM usageHistory WHERE timestamp >= ?`,
       [new Date(overlayCutoff).toISOString()]
     );
     for (const e of histRows) {
       const ts = e.timestamp;
       const modelKey = e.provider ? `${e.model} (${e.provider})` : e.model;
       if (stats.byModel[modelKey] && new Date(ts) > new Date(stats.byModel[modelKey].lastUsed)) stats.byModel[modelKey].lastUsed = ts;
+
+      const comboName = parseJson(e.meta, {})?.requestedModel;
+      if (comboName && stats.byCombo[comboName] && new Date(ts) > new Date(stats.byCombo[comboName].lastUsed)) stats.byCombo[comboName].lastUsed = ts;
 
       if (e.connectionId) {
         const accountName = connectionMap[e.connectionId] || `Account ${e.connectionId.slice(0, 8)}...`;
@@ -574,7 +603,7 @@ export async function getUsageStats(period = "all") {
       cutoff = new Date(Date.now() - PERIOD_MS["24h"]).toISOString();
     }
     const filtered = db.all(
-      `SELECT timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, tokens FROM usageHistory WHERE timestamp >= ?`,
+      `SELECT timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, tokens, meta FROM usageHistory WHERE timestamp >= ?`,
       [cutoff]
     );
 
@@ -585,6 +614,7 @@ export async function getUsageStats(period = "all") {
       const cachedTokens = tokens.cached_tokens || tokens.cache_read_input_tokens || 0;
       const entryCost = r.cost || 0;
       const providerDisplayName = providerNodeNameMap[r.provider] || r.provider;
+      const requestedModel = parseJson(r.meta, {})?.requestedModel;
 
       stats.totalPromptTokens += promptTokens;
       stats.totalCompletionTokens += completionTokens;
@@ -608,6 +638,15 @@ export async function getUsageStats(period = "all") {
       stats.byModel[modelKey].cachedTokens += cachedTokens;
       stats.byModel[modelKey].cost += entryCost;
       if (new Date(r.timestamp) > new Date(stats.byModel[modelKey].lastUsed)) stats.byModel[modelKey].lastUsed = r.timestamp;
+
+      if (requestedModel) {
+        if (!stats.byCombo[requestedModel]) {
+          stats.byCombo[requestedModel] = { requests: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, cost: 0, comboName: requestedModel, models: comboModelsMap[requestedModel] || null, lastUsed: r.timestamp };
+        }
+        const ce = stats.byCombo[requestedModel];
+        ce.requests++; ce.promptTokens += promptTokens; ce.completionTokens += completionTokens; ce.cachedTokens += cachedTokens; ce.cost += entryCost;
+        if (new Date(r.timestamp) > new Date(ce.lastUsed)) ce.lastUsed = r.timestamp;
+      }
 
       if (r.connectionId) {
         const accountName = connectionMap[r.connectionId] || `Account ${r.connectionId.slice(0, 8)}...`;
