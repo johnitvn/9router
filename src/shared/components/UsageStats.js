@@ -119,6 +119,7 @@ function getGroupKey(item, keyField) {
     case "accountName": return item.accountName || `Account ${item.connectionId?.slice(0, 8)}...` || "Unknown Account";
     case "keyName": return item.keyName || "Unknown Key";
     case "endpoint": return item.endpoint || "Unknown Endpoint";
+    case "comboName": return item.comboName || "Unknown Combo";
     default: return item[keyField] || "Unknown";
   }
 }
@@ -185,11 +186,25 @@ const ENDPOINT_COLUMNS = [
   { field: "lastUsed", label: "Last Used", align: "right" },
 ];
 
+const COMBO_COLUMNS = [
+  { field: "comboName", label: "Combo" },
+  { field: "requests", label: "Requests", align: "right" },
+  { field: "lastUsed", label: "Last Used", align: "right" },
+];
+
+const PROVIDER_COLUMNS = [
+  { field: "provider", label: "Provider" },
+  { field: "requests", label: "Requests", align: "right" },
+  { field: "lastUsed", label: "Last Used", align: "right" },
+];
+
 const TABLE_OPTIONS = [
   { value: "model", label: "Usage by Model" },
   { value: "account", label: "Usage by Account" },
   { value: "apiKey", label: "Usage by API Key" },
   { value: "endpoint", label: "Usage by Endpoint" },
+  { value: "combo", label: "Usage by Combo" },
+  { value: "provider", label: "Usage by Provider" },
 ];
 
 const PERIODS = [
@@ -424,6 +439,57 @@ export default function UsageStats({ period: periodProp, setPeriod: setPeriodPro
               <td className="px-6 py-3 font-medium font-mono text-sm">{item.endpoint}</td>
               <td className="px-6 py-3">{item.rawModel}</td>
               <td className="px-6 py-3"><Badge variant="neutral" size="sm">{item.provider}</Badge></td>
+              <td className="px-6 py-3 text-right">{fmt(item.requests)}</td>
+              <td className="px-6 py-3 text-right text-text-muted whitespace-nowrap">{fmtTime(item.lastUsed)}</td>
+            </>
+          ),
+        };
+      }
+      case "combo": {
+        return {
+          columns: COMBO_COLUMNS,
+          groupedData: groupDataByKey(sortData(stats.byCombo, {}, sortBy, sortOrder), "comboName"),
+          storageKey: "usage-stats:expanded-combos",
+          emptyMessage: "No combo usage recorded yet.",
+          renderSummaryCells: (group) => (
+            <>
+              <td className="px-6 py-3 text-text-muted">—</td>
+              <td className="px-6 py-3 text-right">{fmt(group.summary.requests)}</td>
+              <td className="px-6 py-3 text-right text-text-muted whitespace-nowrap">{fmtTime(group.summary.lastUsed)}</td>
+            </>
+          ),
+          renderDetailCells: (item) => (
+            <>
+              <td className="px-6 py-3 font-medium" title={(item.models || []).join(", ")}>
+                {item.comboName}
+                {item.models?.length > 0 && (
+                  <span className="ml-2 text-xs font-normal text-text-muted">
+                    {item.models.length} model{item.models.length > 1 ? "s" : ""}
+                  </span>
+                )}
+              </td>
+              <td className="px-6 py-3 text-right">{fmt(item.requests)}</td>
+              <td className="px-6 py-3 text-right text-text-muted whitespace-nowrap">{fmtTime(item.lastUsed)}</td>
+            </>
+          ),
+        };
+      }
+      case "provider": {
+        return {
+          columns: PROVIDER_COLUMNS,
+          groupedData: groupDataByKey(sortData(stats.byProvider, {}, sortBy, sortOrder), "provider"),
+          storageKey: "usage-stats:expanded-providers",
+          emptyMessage: "No provider usage recorded yet.",
+          renderSummaryCells: (group) => (
+            <>
+              <td className="px-6 py-3 text-text-muted">—</td>
+              <td className="px-6 py-3 text-right">{fmt(group.summary.requests)}</td>
+              <td className="px-6 py-3 text-right text-text-muted whitespace-nowrap">{fmtTime(group.summary.lastUsed)}</td>
+            </>
+          ),
+          renderDetailCells: (item) => (
+            <>
+              <td className="px-6 py-3 font-medium"><Badge variant="neutral" size="sm">{item.provider}</Badge></td>
               <td className="px-6 py-3 text-right">{fmt(item.requests)}</td>
               <td className="px-6 py-3 text-right text-text-muted whitespace-nowrap">{fmtTime(item.lastUsed)}</td>
             </>
